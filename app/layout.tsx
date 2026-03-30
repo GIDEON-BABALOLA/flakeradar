@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Flakeradar",
-  description: "flakeradar is a website that helps to find test that exhibit a degree of flakiness in javascript repositories",
+  description: "flakeradar is a website that helps to find test that exhibit a degree of flakiness in javascript repositories.",
 };
 
 export default function RootLayout({

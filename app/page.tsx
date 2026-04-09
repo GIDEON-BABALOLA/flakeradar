@@ -79,70 +79,36 @@ export default function GitHubSearchPage() {
     [loading]
   );
 
-  // const fetchCommits = useCallback(async () => {
-  //   if (loading) return;
-  //   if (!repo.trim()) {
-  //     setError("Please enter a repository in the format <em>owner/name</em>.");
-  //     setItems(null);
-  //     return;
-  //   }
+  const fetchCommits = useCallback(async () => {
+    if (loading) return;
+    if (!repo.trim()) {
+      setError("Please enter a repository in the format <em>owner/name</em>.");
+      setItems(null);
+      return;
+    }
 
-  //   setLoading(true);
-  //   setError(null);
-  //   setType("commits");
-  //   setItems(null);
-  //   setLinkHdr(null);
-
-  //   try {
-  //     const res = await axios.get("https://api.github.com/search/commits", {
-  //       params: { q: `${keyword} repo:${repo.trim()}` },
-  //       headers: { Accept: "application/vnd.github.cloak-preview" },
-  //     });
-  //     setItems(res.data.items ?? []);
-  //     setCount(res.data.total_count);
-  //     setLinkHdr(res.headers["link"] ?? null);
-  //   } catch (err) {
-  //     setError(getErrorMessage(err));
-  //     setItems(null);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // }, [loading, repo, keyword]);
-// Change the signature and logic of fetchCommits:
-const fetchCommits = useCallback(async (url?: string) => {
-  if (loading) return;
-  if (!url && !repo.trim()) {
-    setError("Please enter a repository in the format <em>owner/name</em>.");
+    setLoading(true);
+    setError(null);
+    setType("commits");
     setItems(null);
-    return;
-  }
+    setLinkHdr(null);
 
-  setLoading(true);
-  setError(null);
-  setType("commits");
-  setItems(null);
-  setLinkHdr(null);
+    try {
+      const res = await axios.get("https://api.github.com/search/commits", {
+        params: { q: `${keyword} repo:${repo.trim()}` },
+        headers: { Accept: "application/vnd.github.cloak-preview" },
+      });
+      setItems(res.data.items ?? []);
+      setCount(res.data.total_count);
+      setLinkHdr(res.headers["link"] ?? null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setItems(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, repo, keyword]);
 
-  try {
-    const res = url
-      ? await axios.get(url, {
-          headers: { Accept: "application/vnd.github.cloak-preview" },
-        })
-      : await axios.get("https://api.github.com/search/commits", {
-          params: { q: `${keyword} repo:${repo.trim()}` },
-          headers: { Accept: "application/vnd.github.cloak-preview" },
-        });
-
-    setItems(res.data.items ?? []);
-    setCount(res.data.total_count);
-    setLinkHdr(res.headers["link"] ?? null);
-  } catch (err) {
-    setError(getErrorMessage(err));
-    setItems(null);
-  } finally {
-    setLoading(false);
-  }
-}, [loading, repo, keyword]);
   return (
     <div className="min-h-screen bg-base flex flex-col items-center px-5 py-12 pb-24">
       <div className="w-full max-w-[840px]">
@@ -176,8 +142,7 @@ const fetchCommits = useCallback(async (url?: string) => {
               items={items}
               count={count}
               linkHeader={linkHdr}
-            // onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
-            onPage={type === "commits" ? fetchCommits : fetchRepos}
+            onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
             />
           </div>
         </div>

@@ -42,13 +42,22 @@ export default function ResultsSection({
       {!loading && !error && items && items.length > 0 && (
         <>
           <div className="flex flex-col gap-2">
-            {items.map((item, i) =>
+            {/* {items.map((item, i) =>
               type === "repos" ? (
                 <RepoCard key={(item as RepoItem).id} item={item as RepoItem} index={i} />
               ) : (
                 <CommitCard key={(item as CommitItem).sha} item={item as CommitItem} index={i} />
               )
-            )}
+            )} */}
+            {items.map((item, i) => {
+  if (type === "repos") {
+    const repo = item as RepoItem;
+    return <RepoCard key={repo.id} item={repo} index={i} />;
+  }
+  const commit = item as CommitItem;
+ console.log(commit)
+  return <CommitCard key={commit.sha} item={commit} index={i} />;
+})}
           </div>
           <Pagination linkHeader={linkHeader} onPage={onPage} />
         </>

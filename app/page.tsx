@@ -100,6 +100,7 @@ export default function GitHubSearchPage() {
       });
       setItems(res.data.items ?? []);
       setCount(res.data.total_count);
+      setLinkHdr(res.headers["link"] ?? null);
     } catch (err) {
       setError(getErrorMessage(err));
       setItems(null);
@@ -141,7 +142,7 @@ export default function GitHubSearchPage() {
               items={items}
               count={count}
               linkHeader={linkHdr}
-              onPage={fetchRepos}
+            onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
             />
           </div>
         </div>

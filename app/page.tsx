@@ -79,36 +79,85 @@ export default function GitHubSearchPage() {
     [loading]
   );
 
-  const fetchCommits = useCallback(async () => {
-    if (loading) return;
-    if (!repo.trim()) {
-      setError("Please enter a repository in the format <em>owner/name</em>.");
-      setItems(null);
-      return;
-    }
+  // const fetchCommits = useCallback(async () => {
+  //   if (loading) return;
+  //   if (!repo.trim()) {
+  //     setError("Please enter a repository in the format <em>owner/name</em>.");
+  //     setItems(null);
+  //     return;
+  //   }
 
-    setLoading(true);
-    setError(null);
-    setType("commits");
+  //   setLoading(true);
+  //   setError(null);
+  //   setType("commits");
+  //   setItems(null);
+  //   setLinkHdr(null);
+
+  //   try {
+  //     const res = await axios.get("https://api.github.com/search/commits", {
+  //       params: { q: `${keyword} repo:${repo.trim()}` },
+  //       headers: { Accept: "application/vnd.github.cloak-preview" },
+  //     });
+  //     setItems(res.data.items ?? []);
+  //     setCount(res.data.total_count);
+  //     setLinkHdr(res.headers["link"] ?? null);
+  //   } catch (err) {
+  //     setError(getErrorMessage(err));
+  //     setItems(null);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [loading, repo, keyword]);
+const fetchCommits = useCallback(async (url?: string) => {
+  if (loading) return;
+  
+  // Only validate repo for initial fetch
+  if (!url && !repo.trim()) {
+    setError("Please enter a repository in the format <em>owner/name</em>.");
     setItems(null);
-    setLinkHdr(null);
+    return;
+  }
 
-    try {
-      const res = await axios.get("https://api.github.com/search/commits", {
-        params: { q: `${keyword} repo:${repo.trim()}` },
-        headers: { Accept: "application/vnd.github.cloak-preview" },
-      });
-      setItems(res.data.items ?? []);
-      setCount(res.data.total_count);
-      setLinkHdr(res.headers["link"] ?? null);
-    } catch (err) {
-      setError(getErrorMessage(err));
-      setItems(null);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  setError(null);
+  setType("commits");
+  
+  // Clear items only on new search, not on pagination
+  if (!url) {
+    setItems(null);
+  }
+  
+  setLinkHdr(null);
+
+  try {
+    const requestUrl = url || "https://api.github.com/search/commits";
+    const config: any = {
+      headers: { Accept: "application/vnd.github.cloak-preview" },
+    };
+    
+    // Only add params for initial request
+    if (!url) {
+      config.params = { q: `${keyword} repo:${repo.trim()}` };
     }
-  }, [loading, repo, keyword]);
-
+    
+    const res = await axios.get(requestUrl, config);
+    
+    // Handle pagination - append for next page
+    if (url && items) {
+      setItems([...items, ...(res.data.items ?? [])]);
+    } else {
+      setItems(res.data.items ?? []);
+    }
+    
+    setCount(res.data.total_count);
+    setLinkHdr(res.headers["link"] ?? null);
+  } catch (err) {
+    setError(getErrorMessage(err));
+    if (!url) setItems(null);
+  } finally {
+    setLoading(false);
+  }
+}, [loading, repo, keyword, items]);
   return (
     <div className="min-h-screen bg-base flex flex-col items-center px-5 py-12 pb-24">
       <div className="w-full max-w-[840px]">
@@ -135,7 +184,7 @@ export default function GitHubSearchPage() {
               />
             )}
 
-            <ResultsSection
+            {/* <ResultsSection
               loading={loading}
               error={error}
               type={type}
@@ -143,7 +192,22 @@ export default function GitHubSearchPage() {
               count={count}
               linkHeader={linkHdr}
             onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
-            />
+            /> */}
+            <ResultsSection
+  loading={loading}
+  error={error}
+  type={type}
+  items={items}
+  count={count}
+  linkHeader={linkHdr}
+  onPage={(url) => {
+    if (type === "commits") {
+      fetchCommits(url);
+    } else {
+      fetchRepos(url);
+    }
+  }}
+/>
           </div>
         </div>
 

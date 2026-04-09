@@ -176,7 +176,8 @@ const fetchCommits = useCallback(async (url?: string) => {
               items={items}
               count={count}
               linkHeader={linkHdr}
-            onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
+            // onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
+            onPage={type === "commits" ? fetchCommits : fetchRepos}
             />
           </div>
         </div>

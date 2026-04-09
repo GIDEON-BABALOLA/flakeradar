@@ -79,9 +79,39 @@ export default function GitHubSearchPage() {
     [loading]
   );
 
-  const fetchCommits = useCallback(async () => {
+  // const fetchCommits = useCallback(async () => {
+  //   if (loading) return;
+  //   if (!repo.trim()) {
+  //     setError("Please enter a repository in the format <em>owner/name</em>.");
+  //     setItems(null);
+  //     return;
+  //   }
+
+  //   setLoading(true);
+  //   setError(null);
+  //   setType("commits");
+  //   setItems(null);
+  //   setLinkHdr(null);
+
+  //   try {
+  //     const res = await axios.get("https://api.github.com/search/commits", {
+  //       params: { q: `${keyword} repo:${repo.trim()}` },
+  //       headers: { Accept: "application/vnd.github.cloak-preview" },
+  //     });
+  //     setItems(res.data.items ?? []);
+  //     setCount(res.data.total_count);
+  //     setLinkHdr(res.headers["link"] ?? null);
+  //   } catch (err) {
+  //     setError(getErrorMessage(err));
+  //     setItems(null);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [loading, repo, keyword]);
+const fetchCommits = useCallback(async (url?: string) => {
     if (loading) return;
-    if (!repo.trim()) {
+
+    if (!url && !repo.trim()) {
       setError("Please enter a repository in the format <em>owner/name</em>.");
       setItems(null);
       return;
@@ -94,10 +124,16 @@ export default function GitHubSearchPage() {
     setLinkHdr(null);
 
     try {
-      const res = await axios.get("https://api.github.com/search/commits", {
-        params: { q: `${keyword} repo:${repo.trim()}` },
-        headers: { Accept: "application/vnd.github.cloak-preview" },
+      const requestUrl = url ?? "https://api.github.com/search/commits";
+      const params = url ? undefined : { q: `${keyword} repo:${repo.trim()}` };
+
+      console.log("Fetching commits from:", requestUrl, params);
+
+      const res = await axios.get(requestUrl, {
+        params,
+        headers: { Accept: "application/vnd.github+json" }, // ← updated header
       });
+
       setItems(res.data.items ?? []);
       setCount(res.data.total_count);
       setLinkHdr(res.headers["link"] ?? null);
@@ -124,14 +160,22 @@ export default function GitHubSearchPage() {
               />
             )}
             {tab === "commits" && (
+              // <CommitsPanel
+              //   repo={repo}
+              //   onRepoChange={setRepo}
+              //   keyword={keyword}
+              //   onKeyword={setKeyword}
+              //   onFetch={fetchCommits}
+              //   loading={loading && type === "commits"}
+              // />
               <CommitsPanel
-                repo={repo}
-                onRepoChange={setRepo}
-                keyword={keyword}
-                onKeyword={setKeyword}
-                onFetch={fetchCommits}
-                loading={loading && type === "commits"}
-              />
+  repo={repo}
+  onRepoChange={setRepo}
+  keyword={keyword}
+  onKeyword={setKeyword}
+  onFetch={() => fetchCommits()}  
+  loading={loading && type === "commits"}
+/>
             )}
 
             <ResultsSection
@@ -141,7 +185,8 @@ export default function GitHubSearchPage() {
               items={items}
               count={count}
               linkHeader={linkHdr}
-            onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
+            // onPage={type === "commits" ? () => fetchCommits() : fetchRepos}
+            onPage={type === "commits" ? fetchCommits : fetchRepos}
             />
           </div>
         </div>

@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import axios, { AxiosError } from "axios";
 
 import type { TabId, RepoItem, CommitItem } from "@/types/github";
-import type { Keyword } from "@/components/KeywordsGroup";
+import type { Keyword, SecondKeyword } from "@/components/KeywordsGroup";
 
 import Header from "@/components/Header";
 import TabBar from "@/components/TabBar";
@@ -29,7 +29,8 @@ export default function GitHubSearchPage() {
   const [type,    setType]    = useState<TabId>("repos");
 
   const [repo,    setRepo]    = useState<string>("");
-  const [keyword, setKeyword] = useState<Keyword>("flaky");
+ const [keyword,       setKeyword]       = useState<Keyword>("flaky");
+const [secondKeyword, setSecondKeyword] = useState<SecondKeyword | null>(null); // ← add
 
   const resetResults = () => {
     setItems(null);
@@ -125,7 +126,12 @@ const fetchCommits = useCallback(async (url?: string) => {
 
     try {
       const requestUrl = url ?? "https://api.github.com/search/commits";
-      const params = url ? undefined : { q: `${keyword} repo:${repo.trim()}` };
+      // const params = url ? undefined : { q: `${keyword} repo:${repo.trim()}` };
+      // After
+const query  = secondKeyword
+  ? `${keyword} ${secondKeyword} repo:${repo.trim()}`
+  : `${keyword} repo:${repo.trim()}`;
+const params = url ? undefined : { q: query };
 
       console.log("Fetching commits from:", requestUrl, params);
 
@@ -143,7 +149,7 @@ const fetchCommits = useCallback(async (url?: string) => {
     } finally {
       setLoading(false);
     }
-  }, [loading, repo, keyword]);
+  }, [loading, repo, keyword, secondKeyword]);
   return (
     <div className="min-h-screen bg-base flex flex-col items-center px-5 py-12 pb-24">
       <div className="w-full max-w-[840px]">
@@ -168,12 +174,24 @@ const fetchCommits = useCallback(async (url?: string) => {
               //   onFetch={fetchCommits}
               //   loading={loading && type === "commits"}
               // />
-              <CommitsPanel
+//               <CommitsPanel
+//   repo={repo}
+//   onRepoChange={setRepo}
+//   keyword={keyword}
+//   onKeyword={setKeyword}
+//   onFetch={() => fetchCommits()}  
+//   loading={loading && type === "commits"}
+// />
+<CommitsPanel
   repo={repo}
   onRepoChange={setRepo}
   keyword={keyword}
-  onKeyword={setKeyword}
-  onFetch={() => fetchCommits()}  
+  // onKeyword={(kw) => { setKeyword(kw); setSecondKeyword(null); }}
+  // onSecondKeyword={setSecondKeyword}
+  onKeyword={(kw) => { setKeyword(kw); setSecondKeyword(null); resetResults(); }}
+  onSecondKeyword={(kw) => { setSecondKeyword(kw); resetResults(); }}
+  secondKeyword={secondKeyword}
+  onFetch={() => fetchCommits()}
   loading={loading && type === "commits"}
 />
             )}

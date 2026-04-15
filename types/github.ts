@@ -1,5 +1,5 @@
-export type TabId = "repos" | "commits";
-
+// export type TabId = "repos" | "commits";
+  export type TabId = "repos" | "commits" | "flaky-concurrent";
 export interface RepoItem {
   id: number;
   full_name: string;

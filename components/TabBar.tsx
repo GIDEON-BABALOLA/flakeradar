@@ -6,10 +6,15 @@ interface Tab {
   icon: string;
 }
 
-const TABS: Tab[] = [
-  { id: "repos",   label: "Repositories", icon: "⬡" },
-  { id: "commits", label: "Commits",      icon: "◈" },
-];
+// const TABS: Tab[] = [
+//   { id: "repos",   label: "Repositories", icon: "⬡" },
+//   { id: "commits", label: "Commits",      icon: "◈" },
+// ];
+  const TABS: Tab[] = [
+    { id: "repos",             label: "Repositories",     icon: "⬡" },
+    { id: "commits",           label: "Commits",          icon: "◈" },
+    { id: "flaky-concurrent",  label: "Flaky Concurrent", icon: "⚡" },  // ← ADD
+  ];
 
 interface TabBarProps {
   activeTab: TabId;

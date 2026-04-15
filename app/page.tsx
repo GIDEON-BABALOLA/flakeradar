@@ -175,7 +175,7 @@ import TabBar from "@/components/TabBar";
 import ReposPanel from "@/components/ReposPanel";
 import CommitsPanel from "@/components/CommitsPanel";
 import ResultsSection from "@/components/ResultsSection";
-
+import FlakyConcurrentPanel from "@/components/FlakyConcurrentPanel";
 const DEFAULT_REPOS_URL =
   "https://api.github.com/search/repositories?q=javascript+sort:stars&per_page=15";
 
@@ -304,6 +304,7 @@ export default function GitHubSearchPage() {
                 loading={loading && type === "commits"}
               />
             )}
+            {tab === "flaky-concurrent" && <FlakyConcurrentPanel />}
             <ResultsSection
               loading={loading}
               error={error}

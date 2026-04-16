@@ -684,7 +684,8 @@ async function searchPRBodies(
         params: {
           // Search PR bodies (and titles as a bonus) for the keywords
           // q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
-          q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
+          // q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
+          q: `flaky network repo:${repo.full_name} type:pr is:merged`,
           per_page: 10,
           page,
         },

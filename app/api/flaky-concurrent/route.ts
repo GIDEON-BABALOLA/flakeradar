@@ -410,7 +410,8 @@ export async function GET(req: NextRequest) {
                   Accept: "application/vnd.github.cloak-preview+json",
                 },
                 params: {
-                  q: `flaky concurren repo:${repo.full_name}`,
+                  // q: `flaky concurren repo:${repo.full_name}`,
+                  q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
                   per_page: 10,
                   page,
                 },

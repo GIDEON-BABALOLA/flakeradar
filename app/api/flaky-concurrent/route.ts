@@ -324,6 +324,170 @@
 //   starRange  – GitHub stars filter e.g. "50000..*", "10000..50000" (default "50000..*")
 //   maxRepos   – repos to scan PER language (default 20, max 100)
 
+// import { NextRequest } from "next/server";
+// import axios from "axios";
+
+// const GH = "https://api.github.com";
+
+// const ghHeaders = {
+//   Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+//   Accept: "application/vnd.github+json",
+// };
+
+// export const dynamic = "force-dynamic";
+
+// type RepoEntry = { full_name: string; language: string };
+
+// export async function GET(req: NextRequest) {
+//   const sp        = req.nextUrl.searchParams;
+//   const starRange = sp.get("starRange") ?? "50000..*";
+//   const maxRepos  = Math.min(100, Math.max(1, parseInt(sp.get("maxRepos") ?? "20", 10)));
+
+//   // How many GitHub pages we need (30 per page)
+//   const pages = Math.ceil(maxRepos / 30);
+
+//   const encoder = new TextEncoder();
+//   const stream = new ReadableStream({
+//     async start(controller) {
+//       const send = (obj: object) =>
+//         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`));
+
+//       try {
+//         // 1. Fetch JS + TS repos for the chosen star range (parallel, multi-page if needed)
+//         const fetchRepos = async (language: string): Promise<RepoEntry[]> => {
+//           const results: RepoEntry[] = [];
+//           for (let page = 1; page <= pages; page++) {
+//             const res = await axios.get(`${GH}/search/repositories`, {
+//               headers: ghHeaders,
+//               params: {
+//                 q: `language:${language} stars:${starRange}`,
+//                 sort: "stars",
+//                 order: "desc",
+//                 per_page: 30,
+//                 page,
+//               },
+//             });
+//             const items: { full_name: string }[] = res.data.items ?? [];
+//             results.push(...items.map((r) => ({ full_name: r.full_name, language })));
+//             if (items.length < 30) break; // no more pages
+//           }
+//           return results.slice(0, maxRepos);
+//         };
+
+//         const [jsRepos, tsRepos] = await Promise.all([
+//           fetchRepos("JavaScript"),
+//           fetchRepos("TypeScript"),
+//         ]);
+
+//         // Deduplicate
+//         const seen = new Set<string>();
+//         const repos = [...jsRepos, ...tsRepos].filter(({ full_name }) => {
+//           if (seen.has(full_name)) return false;
+//           seen.add(full_name);
+//           return true;
+//         });
+
+//         send({
+//           type: "progress",
+//           repo: `Scanning ${repos.length} repos (${jsRepos.length} JS + ${tsRepos.length} TS, deduped)…`,
+//           language: "",
+//         });
+
+//         let totalFound = 0;
+
+//         // 2. Search commits per repo for "flaky" + "concurren*"
+//         for (const repo of repos) {
+//           send({ type: "progress", repo: repo.full_name, language: repo.language });
+
+//           let page = 1;
+//           let hasMore = true;
+
+//           while (hasMore) {
+//             try {
+//               const commitRes = await axios.get(`${GH}/search/commits`, {
+//                 headers: {
+//                   ...ghHeaders,
+//                   Accept: "application/vnd.github.cloak-preview+json",
+//                 },
+//                 params: {
+//                   q: `flaky concurren repo:${repo.full_name}`,
+//                   per_page: 10,
+//                   page,
+//                 },
+//               });
+
+//               const items = commitRes.data.items ?? [];
+
+//               for (const item of items) {
+//                 send({
+//                   type: "commit",
+//                   data: {
+//                     sha: item.sha,
+//                     html_url: item.html_url,
+//                     commit: {
+//                       message: item.commit?.message ?? "",
+//                       author: {
+//                         date: item.commit?.author?.date ?? "",
+//                         name: item.commit?.author?.name ?? "",
+//                       },
+//                     },
+//                     repository: {
+//                       full_name: repo.full_name,
+//                       language: repo.language,
+//                     },
+//                   },
+//                 });
+//                 totalFound++;
+//               }
+
+//               hasMore = items.length === 10 && page < 3;
+//               page++;
+//               if (hasMore) await sleep(300);
+//             } catch {
+//               hasMore = false;
+//             }
+//           }
+
+//           await sleep(500);
+//         }
+
+//         send({ type: "done", total: totalFound });
+//       } catch (err: unknown) {
+//         const message =
+//           (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
+//           "Failed to fetch from GitHub";
+//         send({ type: "error", message });
+//       } finally {
+//         controller.close();
+//       }
+//     },
+//   });
+
+//   return new Response(stream, {
+//     headers: {
+//       "Content-Type": "text/event-stream",
+//       "Cache-Control": "no-cache",
+//       Connection: "keep-alive",
+//     },
+//   });
+// }
+
+// function sleep(ms: number) {
+//   return new Promise((r) => setTimeout(r, ms));
+// }
+// app/api/flaky-concurrent/route.ts
+//
+// For each repo, searches TWO sources:
+//   1. Commit messages   — GitHub commit search (flaky + concurren in message)
+//   2. PR bodies         — GitHub PR search (flaky + concurren in body), then
+//                          resolves each PR's merge commit for the real SHA/diff
+//
+// Results from both sources are deduplicated by SHA before streaming.
+//
+// Query params:
+//   starRange  – GitHub stars filter e.g. "50000..*", "10000..50000" (default "200000..*")
+//   maxRepos   – repos to scan PER language (default 20, max 100)
+
 import { NextRequest } from "next/server";
 import axios from "axios";
 
@@ -334,26 +498,40 @@ const ghHeaders = {
   Accept: "application/vnd.github+json",
 };
 
+const commitSearchHeaders = {
+  ...ghHeaders,
+  Accept: "application/vnd.github.cloak-preview+json",
+};
+
 export const dynamic = "force-dynamic";
 
 type RepoEntry = { full_name: string; language: string };
 
+// The shape we stream to the client — matches your existing CommitItem type
+type CommitPayload = {
+  sha: string;
+  html_url: string;
+  source: "commit" | "pr";  // so you can see where it came from
+  commit: {
+    message: string;
+    author: { date: string; name: string };
+  };
+  repository: { full_name: string; language: string };
+};
+
 export async function GET(req: NextRequest) {
   const sp        = req.nextUrl.searchParams;
-  const starRange = sp.get("starRange") ?? "50000..*";
+  const starRange = sp.get("starRange") ?? "200000..*";
   const maxRepos  = Math.min(100, Math.max(1, parseInt(sp.get("maxRepos") ?? "20", 10)));
+  const pages     = Math.ceil(maxRepos / 30);
 
-  // How many GitHub pages we need (30 per page)
-  const pages = Math.ceil(maxRepos / 30);
-
-  const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj: object) =>
         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`));
 
       try {
-        // 1. Fetch JS + TS repos for the chosen star range (parallel, multi-page if needed)
+        // ── 1. Fetch JS + TS repos ──────────────────────────────────────────
         const fetchRepos = async (language: string): Promise<RepoEntry[]> => {
           const results: RepoEntry[] = [];
           for (let page = 1; page <= pages; page++) {
@@ -369,7 +547,7 @@ export async function GET(req: NextRequest) {
             });
             const items: { full_name: string }[] = res.data.items ?? [];
             results.push(...items.map((r) => ({ full_name: r.full_name, language })));
-            if (items.length < 30) break; // no more pages
+            if (items.length < 30) break;
           }
           return results.slice(0, maxRepos);
         };
@@ -379,7 +557,7 @@ export async function GET(req: NextRequest) {
           fetchRepos("TypeScript"),
         ]);
 
-        // Deduplicate
+        // Deduplicate repos
         const seen = new Set<string>();
         const repos = [...jsRepos, ...tsRepos].filter(({ full_name }) => {
           if (seen.has(full_name)) return false;
@@ -389,65 +567,32 @@ export async function GET(req: NextRequest) {
 
         send({
           type: "progress",
-          repo: `Scanning ${repos.length} repos (${jsRepos.length} JS + ${tsRepos.length} TS, deduped)…`,
+          repo: `Scanning ${repos.length} repos (${jsRepos.length} JS + ${tsRepos.length} TS)…`,
           language: "",
         });
 
         let totalFound = 0;
 
-        // 2. Search commits per repo for "flaky" + "concurren*"
+        // ── 2. Per-repo: search commits + PRs ──────────────────────────────
         for (const repo of repos) {
           send({ type: "progress", repo: repo.full_name, language: repo.language });
 
-          let page = 1;
-          let hasMore = true;
+          // Deduplicate SHAs within this repo across both sources
+          const repoSeenShas = new Set<string>();
 
-          while (hasMore) {
-            try {
-              const commitRes = await axios.get(`${GH}/search/commits`, {
-                headers: {
-                  ...ghHeaders,
-                  Accept: "application/vnd.github.cloak-preview+json",
-                },
-                params: {
-                  // q: `flaky concurren repo:${repo.full_name}`,
-                  q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
-                  per_page: 10,
-                  page,
-                },
-              });
+          const emitCommit = (payload: CommitPayload) => {
+            if (repoSeenShas.has(payload.sha)) return;
+            repoSeenShas.add(payload.sha);
+            send({ type: "commit", data: payload });
+            totalFound++;
+          };
 
-              const items = commitRes.data.items ?? [];
+          // ── 2a. Commit message search ─────────────────────────────────────
+          await searchCommitMessages(repo, emitCommit);
+          await sleep(300);
 
-              for (const item of items) {
-                send({
-                  type: "commit",
-                  data: {
-                    sha: item.sha,
-                    html_url: item.html_url,
-                    commit: {
-                      message: item.commit?.message ?? "",
-                      author: {
-                        date: item.commit?.author?.date ?? "",
-                        name: item.commit?.author?.name ?? "",
-                      },
-                    },
-                    repository: {
-                      full_name: repo.full_name,
-                      language: repo.language,
-                    },
-                  },
-                });
-                totalFound++;
-              }
-
-              hasMore = items.length === 10 && page < 3;
-              page++;
-              if (hasMore) await sleep(300);
-            } catch {
-              hasMore = false;
-            }
-          }
+          // ── 2b. PR body search ────────────────────────────────────────────
+          await searchPRBodies(repo, emitCommit);
 
           await sleep(500);
         }
@@ -471,6 +616,129 @@ export async function GET(req: NextRequest) {
       Connection: "keep-alive",
     },
   });
+}
+
+// ── Commit message search ─────────────────────────────────────────────────────
+// Searches commits whose message contains "flaky" AND "concurren*"
+
+async function searchCommitMessages(
+  repo: RepoEntry,
+  emit: (c: CommitPayload) => void,
+) {
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const res = await axios.get(`${GH}/search/commits`, {
+        headers: commitSearchHeaders,
+        params: {
+          q: `flaky concurren repo:${repo.full_name}`,
+          per_page: 10,
+          page,
+        },
+      });
+
+      const items = res.data.items ?? [];
+
+      for (const item of items) {
+        emit({
+          sha: item.sha,
+          html_url: item.html_url,
+          source: "commit",
+          commit: {
+            message: item.commit?.message ?? "",
+            author: {
+              date: item.commit?.author?.date ?? "",
+              name: item.commit?.author?.name ?? "",
+            },
+          },
+          repository: { full_name: repo.full_name, language: repo.language },
+        });
+      }
+
+      hasMore = items.length === 10 && page < 3;
+      page++;
+      if (hasMore) await sleep(300);
+    } catch {
+      hasMore = false;
+    }
+  }
+}
+
+// ── PR body search ────────────────────────────────────────────────────────────
+// Finds merged PRs whose description contains "flaky" AND "concurren*",
+// then resolves the actual merge commit for each PR.
+
+async function searchPRBodies(
+  repo: RepoEntry,
+  emit: (c: CommitPayload) => void,
+) {
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const res = await axios.get(`${GH}/search/issues`, {
+        headers: ghHeaders,
+        params: {
+          // Search PR bodies (and titles as a bonus) for the keywords
+          q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
+          per_page: 10,
+          page,
+        },
+      });
+
+      const items = res.data.items ?? [];
+
+      for (const pr of items) {
+        // Fetch the PR details to get the merge_commit_sha
+        try {
+          const prRes = await axios.get(
+            `${GH}/repos/${repo.full_name}/pulls/${pr.number}`,
+            { headers: ghHeaders },
+          );
+
+          const mergeCommitSha: string | null = prRes.data.merge_commit_sha ?? null;
+          if (!mergeCommitSha) continue;
+
+          // Fetch the actual commit object so we have the message + date
+          const commitRes = await axios.get(
+            `${GH}/repos/${repo.full_name}/commits/${mergeCommitSha}`,
+            { headers: ghHeaders },
+          );
+
+          const c = commitRes.data;
+
+          emit({
+            sha: mergeCommitSha,
+            html_url: c.html_url ?? `https://github.com/${repo.full_name}/commit/${mergeCommitSha}`,
+            source: "pr",
+            commit: {
+              // Prefix with the PR title so it's clear in the UI what the PR was about
+              message: `[PR #${pr.number}] ${pr.title}\n\n${c.commit?.message ?? ""}`,
+              author: {
+                date: c.commit?.author?.date ?? "",
+                name: c.commit?.author?.name ?? "",
+              },
+            },
+            repository: { full_name: repo.full_name, language: repo.language },
+          });
+
+          await sleep(200); // small pause between commit fetches
+        } catch {
+          // If we can't resolve the merge commit, skip this PR
+          continue;
+        }
+      }
+
+      hasMore = items.length === 10 && page < 3;
+      page++;
+      if (hasMore) await sleep(300);
+    } catch {
+      hasMore = false;
+    }
+  }
 }
 
 function sleep(ms: number) {

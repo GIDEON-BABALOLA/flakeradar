@@ -408,7 +408,7 @@ export default function FlakyConcurrentPanel() {
           label="Repo page (×30 repos)"
           value={repoPage}
           min={1}
-          max={10}
+          max={30}
           onChange={setRepoPage}
           disabled={loading}
         />

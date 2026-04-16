@@ -1020,7 +1020,7 @@ export default function FlakyNetworkPanel() {
       <p className="font-mono text-[0.78rem] text-zinc-500 mb-5 leading-relaxed">
         Scans JavaScript &amp; TypeScript repos for commits mentioning{" "}
         <span className="text-amber-400">flaky</span> +{" "}
-        <span className="text-amber-400">network/concurrency</span>.
+        <span className="text-amber-400">network/network</span>.
         Pick a star range to reach different repo tiers.
       </p>
 

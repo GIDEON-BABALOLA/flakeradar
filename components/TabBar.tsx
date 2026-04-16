@@ -14,6 +14,7 @@ interface Tab {
     { id: "repos",             label: "Repositories",     icon: "⬡" },
     { id: "commits",           label: "Commits",          icon: "◈" },
     { id: "flaky-concurrent",  label: "Flaky Concurrent", icon: "⚡" },  // ← ADD
+    { id: "flaky-network",  label: "Flaky Network", icon: "⚡" },  // ← ADD
   ];
 
 interface TabBarProps {

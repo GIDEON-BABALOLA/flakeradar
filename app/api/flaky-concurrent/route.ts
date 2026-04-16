@@ -683,7 +683,8 @@ async function searchPRBodies(
         headers: ghHeaders,
         params: {
           // Search PR bodies (and titles as a bonus) for the keywords
-          q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
+          // q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
+          q: `test repo:${repo.full_name} type:pr is:merged`,
           per_page: 10,
           page,
         },

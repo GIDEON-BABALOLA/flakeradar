@@ -176,6 +176,7 @@ import ReposPanel from "@/components/ReposPanel";
 import CommitsPanel from "@/components/CommitsPanel";
 import ResultsSection from "@/components/ResultsSection";
 import FlakyConcurrentPanel from "@/components/FlakyConcurrentPanel";
+import FlakyNetworkPanel from "@/components/FlakyNetworkPanel";
 const DEFAULT_REPOS_URL =
   "https://api.github.com/search/repositories?q=javascript+sort:stars&per_page=15";
 
@@ -305,6 +306,7 @@ export default function GitHubSearchPage() {
               />
             )}
             {tab === "flaky-concurrent" && <FlakyConcurrentPanel />}
+            {tab === "flaky-network" && <FlakyNetworkPanel />}
             <ResultsSection
               loading={loading}
               error={error}

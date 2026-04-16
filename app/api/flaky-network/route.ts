@@ -1,4 +1,4 @@
-// // app/api/flaky-concurrent/route.ts
+// // app/api/flaky-networkt/route.ts
 // //
 // // Streams Server-Sent Events (SSE) to the client.
 // // Each event is one of:
@@ -21,7 +21,7 @@
 //   Accept: "application/vnd.github+json",
 // };
 
-// // GitHub search lets us do: repo:owner/name flaky concurrent in:message
+// // GitHub search lets us do: repo:owner/name flaky networkt in:message
 // // We'll search commits per-repo so we get accurate results.
 
 // export const dynamic = "force-dynamic"; // never cache this route
@@ -56,11 +56,11 @@
 
 //         let totalFound = 0;
 
-//         // 2. For each repo, search commits with flaky + concurrent/concurrency keywords
+//         // 2. For each repo, search commits with flaky + networkt/networkcy keywords
 //         for (const repo of repos) {
 //           send({ type: "progress", repo: repo.full_name, page: 1 });
 
-//           // GitHub commit search: q=flaky+concurrent+repo:owner/name
+//           // GitHub commit search: q=flaky+networkt+repo:owner/name
 //           let page = 1;
 //           let hasMore = true;
 
@@ -72,7 +72,7 @@
 //                   Accept: "application/vnd.github.cloak-preview+json",
 //                 },
 //                 params: {
-//                   q: `flaky concurren repo:${repo.full_name}`,
+//                   q: `flaky network repo:${repo.full_name}`,
 //                   per_page: 10,
 //                   page,
 //                 },
@@ -146,7 +146,7 @@
 //   return new Promise((r) => setTimeout(r, ms));
 // }
 
-// app/api/flaky-concurrent/route.ts
+// app/api/flaky-networkt/route.ts
 //
 // Streams Server-Sent Events (SSE) to the client.
 // Each event is one of:
@@ -235,7 +235,7 @@
 
 //         let totalFound = 0;
 
-//         // 2. For each repo, search commits containing "flaky" AND "concurren*"
+//         // 2. For each repo, search commits containing "flaky" AND "network*"
 //         for (const repo of repos) {
 //           send({ type: "progress", repo: repo.full_name, language: repo.language });
 
@@ -250,7 +250,7 @@
 //                   Accept: "application/vnd.github.cloak-preview+json",
 //                 },
 //                 params: {
-//                   q: `flaky concurren repo:${repo.full_name}`,
+//                   q: `flaky network repo:${repo.full_name}`,
 //                 //   q: `test repo:${repo.full_name}`,
 //                   per_page: 10,
 //                   page,
@@ -318,7 +318,7 @@
 // function sleep(ms: number) {
 //   return new Promise((r) => setTimeout(r, ms));
 // }
-// app/api/flaky-concurrent/route.ts
+// app/api/flaky-networkt/route.ts
 //
 // Query params:
 //   starRange  – GitHub stars filter e.g. "50000..*", "10000..50000" (default "50000..*")
@@ -395,7 +395,7 @@
 
 //         let totalFound = 0;
 
-//         // 2. Search commits per repo for "flaky" + "concurren*"
+//         // 2. Search commits per repo for "flaky" + "network*"
 //         for (const repo of repos) {
 //           send({ type: "progress", repo: repo.full_name, language: repo.language });
 
@@ -410,7 +410,7 @@
 //                   Accept: "application/vnd.github.cloak-preview+json",
 //                 },
 //                 params: {
-//                   q: `flaky concurren repo:${repo.full_name}`,
+//                   q: `flaky network repo:${repo.full_name}`,
 //                   per_page: 10,
 //                   page,
 //                 },
@@ -475,11 +475,11 @@
 // function sleep(ms: number) {
 //   return new Promise((r) => setTimeout(r, ms));
 // }
-// app/api/flaky-concurrent/route.ts
+// app/api/flaky-networkt/route.ts
 //
 // For each repo, searches TWO sources:
-//   1. Commit messages   — GitHub commit search (flaky + concurren in message)
-//   2. PR bodies         — GitHub PR search (flaky + concurren in body), then
+//   1. Commit messages   — GitHub commit search (flaky + network in message)
+//   2. PR bodies         — GitHub PR search (flaky + network in body), then
 //                          resolves each PR's merge commit for the real SHA/diff
 //
 // Results from both sources are deduplicated by SHA before streaming.
@@ -619,7 +619,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ── Commit message search ─────────────────────────────────────────────────────
-// Searches commits whose message contains "flaky" AND "concurren*"
+// Searches commits whose message contains "flaky" AND "network*"
 
 async function searchCommitMessages(
   repo: RepoEntry,
@@ -633,7 +633,7 @@ async function searchCommitMessages(
       const res = await axios.get(`${GH}/search/commits`, {
         headers: commitSearchHeaders,
         params: {
-          q: `flaky concurren repo:${repo.full_name}`,
+          q: `flaky network repo:${repo.full_name}`,
           per_page: 10,
           page,
         },
@@ -667,7 +667,7 @@ async function searchCommitMessages(
 }
 
 // ── PR body search ────────────────────────────────────────────────────────────
-// Finds merged PRs whose description contains "flaky" AND "concurren*",
+// Finds merged PRs whose description contains "flaky" AND "network*",
 // then resolves the actual merge commit for each PR.
 
 async function searchPRBodies(
@@ -683,8 +683,8 @@ async function searchPRBodies(
         headers: ghHeaders,
         params: {
           // Search PR bodies (and titles as a bonus) for the keywords
-          // q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
-          q: `flaky concurren repo:${repo.full_name} type:pr is:merged`,
+          // q: `flaky network repo:${repo.full_name} type:pr is:merged`,
+          q: `flaky network repo:${repo.full_name} type:pr is:merged`,
           per_page: 10,
           page,
         },

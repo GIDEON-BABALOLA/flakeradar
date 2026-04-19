@@ -488,265 +488,6 @@
 //   starRange  – GitHub stars filter e.g. "50000..*", "10000..50000" (default "200000..*")
 //   maxRepos   – repos to scan PER language (default 20, max 100)
 
-// import { NextRequest } from "next/server";
-// import axios from "axios";
-
-// const GH = "https://api.github.com";
-
-// const ghHeaders = {
-//   Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-//   Accept: "application/vnd.github+json",
-// };
-
-// const commitSearchHeaders = {
-//   ...ghHeaders,
-//   Accept: "application/vnd.github.cloak-preview+json",
-// };
-
-// export const dynamic = "force-dynamic";
-
-// type RepoEntry = { full_name: string; language: string };
-
-// // The shape we stream to the client — matches your existing CommitItem type
-// type CommitPayload = {
-//   sha: string;
-//   html_url: string;
-//   source: "commit" | "pr";  // so you can see where it came from
-//   commit: {
-//     message: string;
-//     author: { date: string; name: string };
-//   };
-//   repository: { full_name: string; language: string };
-// };
-
-// export async function GET(req: NextRequest) {
-//   const sp        = req.nextUrl.searchParams;
-//   const starRange = sp.get("starRange") ?? "200000..*";
-//   const maxRepos  = Math.min(100, Math.max(1, parseInt(sp.get("maxRepos") ?? "20", 10)));
-//   const pages     = Math.ceil(maxRepos / 30);
-
-//   const stream = new ReadableStream({
-//     async start(controller) {
-//       const send = (obj: object) =>
-//         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`));
-
-//       try {
-//         // ── 1. Fetch JS + TS repos ──────────────────────────────────────────
-//         const fetchRepos = async (language: string): Promise<RepoEntry[]> => {
-//           const results: RepoEntry[] = [];
-//           for (let page = 1; page <= pages; page++) {
-//             const res = await axios.get(`${GH}/search/repositories`, {
-//               headers: ghHeaders,
-//               params: {
-//                 q: `language:${language} stars:${starRange}`,
-//                 sort: "stars",
-//                 order: "desc",
-//                 per_page: 30,
-//                 page,
-//               },
-//             });
-//             const items: { full_name: string }[] = res.data.items ?? [];
-//             results.push(...items.map((r) => ({ full_name: r.full_name, language })));
-//             if (items.length < 30) break;
-//           }
-//           return results.slice(0, maxRepos);
-//         };
-
-//         const [jsRepos, tsRepos] = await Promise.all([
-//           fetchRepos("JavaScript"),
-//           fetchRepos("TypeScript"),
-//         ]);
-
-//         // Deduplicate repos
-//         const seen = new Set<string>();
-//         const repos = [...jsRepos, ...tsRepos].filter(({ full_name }) => {
-//           if (seen.has(full_name)) return false;
-//           seen.add(full_name);
-//           return true;
-//         });
-
-//         send({
-//           type: "progress",
-//           repo: `Scanning ${repos.length} repos (${jsRepos.length} JS + ${tsRepos.length} TS)…`,
-//           language: "",
-//         });
-
-//         let totalFound = 0;
-
-//         // ── 2. Per-repo: search commits + PRs ──────────────────────────────
-//         for (const repo of repos) {
-//           send({ type: "progress", repo: repo.full_name, language: repo.language });
-
-//           // Deduplicate SHAs within this repo across both sources
-//           const repoSeenShas = new Set<string>();
-
-//           const emitCommit = (payload: CommitPayload) => {
-//             if (repoSeenShas.has(payload.sha)) return;
-//             repoSeenShas.add(payload.sha);
-//             send({ type: "commit", data: payload });
-//             totalFound++;
-//           };
-
-//           // ── 2a. Commit message search ─────────────────────────────────────
-//           await searchCommitMessages(repo, emitCommit);
-//           await sleep(300);
-
-//           // ── 2b. PR body search ────────────────────────────────────────────
-//           await searchPRBodies(repo, emitCommit);
-
-//           await sleep(500);
-//         }
-
-//         send({ type: "done", total: totalFound });
-//       } catch (err: unknown) {
-//         const message =
-//           (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
-//           "Failed to fetch from GitHub";
-//         send({ type: "error", message });
-//       } finally {
-//         controller.close();
-//       }
-//     },
-//   });
-
-//   return new Response(stream, {
-//     headers: {
-//       "Content-Type": "text/event-stream",
-//       "Cache-Control": "no-cache",
-//       Connection: "keep-alive",
-//     },
-//   });
-// }
-
-// // ── Commit message search ─────────────────────────────────────────────────────
-// // Searches commits whose message contains "flaky" AND "network*"
-
-// async function searchCommitMessages(
-//   repo: RepoEntry,
-//   emit: (c: CommitPayload) => void,
-// ) {
-//   let page = 1;
-//   let hasMore = true;
-
-//   while (hasMore) {
-//     try {
-//       const res = await axios.get(`${GH}/search/commits`, {
-//         headers: commitSearchHeaders,
-//         params: {
-//           q: `flaky network repo:${repo.full_name}`,
-//           per_page: 10,
-//           page,
-//         },
-//       });
-
-//       const items = res.data.items ?? [];
-
-//       for (const item of items) {
-//         emit({
-//           sha: item.sha,
-//           html_url: item.html_url,
-//           source: "commit",
-//           commit: {
-//             message: item.commit?.message ?? "",
-//             author: {
-//               date: item.commit?.author?.date ?? "",
-//               name: item.commit?.author?.name ?? "",
-//             },
-//           },
-//           repository: { full_name: repo.full_name, language: repo.language },
-//         });
-//       }
-
-//       hasMore = items.length === 10 && page < 3;
-//       page++;
-//       if (hasMore) await sleep(300);
-//     } catch {
-//       hasMore = false;
-//     }
-//   }
-// }
-
-// // ── PR body search ────────────────────────────────────────────────────────────
-// // Finds merged PRs whose description contains "flaky" AND "network*",
-// // then resolves the actual merge commit for each PR.
-
-// async function searchPRBodies(
-//   repo: RepoEntry,
-//   emit: (c: CommitPayload) => void,
-// ) {
-//   let page = 1;
-//   let hasMore = true;
-
-//   while (hasMore) {
-//     try {
-//       const res = await axios.get(`${GH}/search/issues`, {
-//         headers: ghHeaders,
-//         params: {
-//           // Search PR bodies (and titles as a bonus) for the keywords
-//           // q: `flaky network repo:${repo.full_name} type:pr is:merged`,
-//           q: `flaky network repo:${repo.full_name} type:pr is:merged`,
-//           per_page: 10,
-//           page,
-//         },
-//       });
-
-//       const items = res.data.items ?? [];
-
-//       for (const pr of items) {
-//         // Fetch the PR details to get the merge_commit_sha
-//         try {
-//           const prRes = await axios.get(
-//             `${GH}/repos/${repo.full_name}/pulls/${pr.number}`,
-//             { headers: ghHeaders },
-//           );
-
-//           const mergeCommitSha: string | null = prRes.data.merge_commit_sha ?? null;
-//           if (!mergeCommitSha) continue;
-
-//           // Fetch the actual commit object so we have the message + date
-//           const commitRes = await axios.get(
-//             `${GH}/repos/${repo.full_name}/commits/${mergeCommitSha}`,
-//             { headers: ghHeaders },
-//           );
-
-//           const c = commitRes.data;
-
-//           emit({
-//             sha: mergeCommitSha,
-//             html_url: c.html_url ?? `https://github.com/${repo.full_name}/commit/${mergeCommitSha}`,
-//             source: "pr",
-//             commit: {
-//               // Prefix with the PR title so it's clear in the UI what the PR was about
-//               message: `[PR #${pr.number}] ${pr.title}\n\n${c.commit?.message ?? ""}`,
-//               author: {
-//                 date: c.commit?.author?.date ?? "",
-//                 name: c.commit?.author?.name ?? "",
-//               },
-//             },
-//             repository: { full_name: repo.full_name, language: repo.language },
-//           });
-
-//           await sleep(200); // small pause between commit fetches
-//         } catch {
-//           // If we can't resolve the merge commit, skip this PR
-//           continue;
-//         }
-//       }
-
-//       hasMore = items.length === 10 && page < 3;
-//       page++;
-//       if (hasMore) await sleep(300);
-//     } catch {
-//       hasMore = false;
-//     }
-//   }
-// }
-
-// function sleep(ms: number) {
-//   return new Promise((r) => setTimeout(r, ms));
-// }
-// app/api/flaky-network/route.ts
-
 import { NextRequest } from "next/server";
 import axios from "axios";
 
@@ -766,26 +507,17 @@ export const dynamic = "force-dynamic";
 
 type RepoEntry = { full_name: string; language: string };
 
+// The shape we stream to the client — matches your existing CommitItem type
 type CommitPayload = {
   sha: string;
   html_url: string;
-  source: "commit" | "pr";
+  source: "commit" | "pr";  // so you can see where it came from
   commit: {
     message: string;
     author: { date: string; name: string };
   };
   repository: { full_name: string; language: string };
 };
-
-// ── Validation ────────────────────────────────────────────────────────────────
-// Both "flaky" AND a network-related word must appear in the text.
-
-const FLAKY_RE    = /\bflak(y|e|ey|iness|ily)?\b/i;
-const NETWORK_RE  = /\bnetwork(ing|ed|s)?\b/i;
-
-function isValidNetworkCommit(text: string): boolean {
-  return FLAKY_RE.test(text) && NETWORK_RE.test(text);
-}
 
 export async function GET(req: NextRequest) {
   const sp        = req.nextUrl.searchParams;
@@ -799,6 +531,7 @@ export async function GET(req: NextRequest) {
         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`));
 
       try {
+        // ── 1. Fetch JS + TS repos ──────────────────────────────────────────
         const fetchRepos = async (language: string): Promise<RepoEntry[]> => {
           const results: RepoEntry[] = [];
           for (let page = 1; page <= pages; page++) {
@@ -824,6 +557,7 @@ export async function GET(req: NextRequest) {
           fetchRepos("TypeScript"),
         ]);
 
+        // Deduplicate repos
         const seen = new Set<string>();
         const repos = [...jsRepos, ...tsRepos].filter(({ full_name }) => {
           if (seen.has(full_name)) return false;
@@ -839,9 +573,11 @@ export async function GET(req: NextRequest) {
 
         let totalFound = 0;
 
+        // ── 2. Per-repo: search commits + PRs ──────────────────────────────
         for (const repo of repos) {
           send({ type: "progress", repo: repo.full_name, language: repo.language });
 
+          // Deduplicate SHAs within this repo across both sources
           const repoSeenShas = new Set<string>();
 
           const emitCommit = (payload: CommitPayload) => {
@@ -851,9 +587,13 @@ export async function GET(req: NextRequest) {
             totalFound++;
           };
 
+          // ── 2a. Commit message search ─────────────────────────────────────
           await searchCommitMessages(repo, emitCommit);
           await sleep(300);
+
+          // ── 2b. PR body search ────────────────────────────────────────────
           await searchPRBodies(repo, emitCommit);
+
           await sleep(500);
         }
 
@@ -878,7 +618,13 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function searchCommitMessages(repo: RepoEntry, emit: (c: CommitPayload) => void) {
+// ── Commit message search ─────────────────────────────────────────────────────
+// Searches commits whose message contains "flaky" AND "network*"
+
+async function searchCommitMessages(
+  repo: RepoEntry,
+  emit: (c: CommitPayload) => void,
+) {
   let page = 1;
   let hasMore = true;
 
@@ -887,7 +633,7 @@ async function searchCommitMessages(repo: RepoEntry, emit: (c: CommitPayload) =>
       const res = await axios.get(`${GH}/search/commits`, {
         headers: commitSearchHeaders,
         params: {
-          q: `flak network repo:${repo.full_name}`,
+          q: `flaky network repo:${repo.full_name}`,
           per_page: 10,
           page,
         },
@@ -896,17 +642,12 @@ async function searchCommitMessages(repo: RepoEntry, emit: (c: CommitPayload) =>
       const items = res.data.items ?? [];
 
       for (const item of items) {
-        const message: string = item.commit?.message ?? "";
-
-        // Hard filter — both words must actually be present
-        if (!isValidNetworkCommit(message)) continue;
-
         emit({
           sha: item.sha,
           html_url: item.html_url,
           source: "commit",
           commit: {
-            message,
+            message: item.commit?.message ?? "",
             author: {
               date: item.commit?.author?.date ?? "",
               name: item.commit?.author?.name ?? "",
@@ -925,7 +666,14 @@ async function searchCommitMessages(repo: RepoEntry, emit: (c: CommitPayload) =>
   }
 }
 
-async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void) {
+// ── PR body search ────────────────────────────────────────────────────────────
+// Finds merged PRs whose description contains "flaky" AND "network*",
+// then resolves the actual merge commit for each PR.
+
+async function searchPRBodies(
+  repo: RepoEntry,
+  emit: (c: CommitPayload) => void,
+) {
   let page = 1;
   let hasMore = true;
 
@@ -934,7 +682,9 @@ async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void)
       const res = await axios.get(`${GH}/search/issues`, {
         headers: ghHeaders,
         params: {
-          q: `flak network repo:${repo.full_name} type:pr is:merged`,
+          // Search PR bodies (and titles as a bonus) for the keywords
+          // q: `flaky network repo:${repo.full_name} type:pr is:merged`,
+          q: `flaky network repo:${repo.full_name} type:pr is:merged`,
           per_page: 10,
           page,
         },
@@ -943,10 +693,7 @@ async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void)
       const items = res.data.items ?? [];
 
       for (const pr of items) {
-        // Hard filter — check PR title + body both contain the required words
-        const prText = `${pr.title ?? ""} ${pr.body ?? ""}`;
-        if (!isValidNetworkCommit(prText)) continue;
-
+        // Fetch the PR details to get the merge_commit_sha
         try {
           const prRes = await axios.get(
             `${GH}/repos/${repo.full_name}/pulls/${pr.number}`,
@@ -956,6 +703,7 @@ async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void)
           const mergeCommitSha: string | null = prRes.data.merge_commit_sha ?? null;
           if (!mergeCommitSha) continue;
 
+          // Fetch the actual commit object so we have the message + date
           const commitRes = await axios.get(
             `${GH}/repos/${repo.full_name}/commits/${mergeCommitSha}`,
             { headers: ghHeaders },
@@ -968,6 +716,7 @@ async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void)
             html_url: c.html_url ?? `https://github.com/${repo.full_name}/commit/${mergeCommitSha}`,
             source: "pr",
             commit: {
+              // Prefix with the PR title so it's clear in the UI what the PR was about
               message: `[PR #${pr.number}] ${pr.title}\n\n${c.commit?.message ?? ""}`,
               author: {
                 date: c.commit?.author?.date ?? "",
@@ -977,8 +726,9 @@ async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void)
             repository: { full_name: repo.full_name, language: repo.language },
           });
 
-          await sleep(200);
+          await sleep(200); // small pause between commit fetches
         } catch {
+          // If we can't resolve the merge commit, skip this PR
           continue;
         }
       }
@@ -995,3 +745,253 @@ async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void)
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
+// app/api/flaky-network/route.ts
+
+// import { NextRequest } from "next/server";
+// import axios from "axios";
+
+// const GH = "https://api.github.com";
+
+// const ghHeaders = {
+//   Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+//   Accept: "application/vnd.github+json",
+// };
+
+// const commitSearchHeaders = {
+//   ...ghHeaders,
+//   Accept: "application/vnd.github.cloak-preview+json",
+// };
+
+// export const dynamic = "force-dynamic";
+
+// type RepoEntry = { full_name: string; language: string };
+
+// type CommitPayload = {
+//   sha: string;
+//   html_url: string;
+//   source: "commit" | "pr";
+//   commit: {
+//     message: string;
+//     author: { date: string; name: string };
+//   };
+//   repository: { full_name: string; language: string };
+// };
+
+// // ── Validation ────────────────────────────────────────────────────────────────
+// // Both "flaky" AND a network-related word must appear in the text.
+
+// const FLAKY_RE    = /\bflak(y|e|ey|iness|ily)?\b/i;
+// const NETWORK_RE  = /\bnetwork(ing|ed|s)?\b/i;
+
+// function isValidNetworkCommit(text: string): boolean {
+//   return FLAKY_RE.test(text) && NETWORK_RE.test(text);
+// }
+
+// export async function GET(req: NextRequest) {
+//   const sp        = req.nextUrl.searchParams;
+//   const starRange = sp.get("starRange") ?? "200000..*";
+//   const maxRepos  = Math.min(100, Math.max(1, parseInt(sp.get("maxRepos") ?? "20", 10)));
+//   const pages     = Math.ceil(maxRepos / 30);
+
+//   const stream = new ReadableStream({
+//     async start(controller) {
+//       const send = (obj: object) =>
+//         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`));
+
+//       try {
+//         const fetchRepos = async (language: string): Promise<RepoEntry[]> => {
+//           const results: RepoEntry[] = [];
+//           for (let page = 1; page <= pages; page++) {
+//             const res = await axios.get(`${GH}/search/repositories`, {
+//               headers: ghHeaders,
+//               params: {
+//                 q: `language:${language} stars:${starRange}`,
+//                 sort: "stars",
+//                 order: "desc",
+//                 per_page: 30,
+//                 page,
+//               },
+//             });
+//             const items: { full_name: string }[] = res.data.items ?? [];
+//             results.push(...items.map((r) => ({ full_name: r.full_name, language })));
+//             if (items.length < 30) break;
+//           }
+//           return results.slice(0, maxRepos);
+//         };
+
+//         const [jsRepos, tsRepos] = await Promise.all([
+//           fetchRepos("JavaScript"),
+//           fetchRepos("TypeScript"),
+//         ]);
+
+//         const seen = new Set<string>();
+//         const repos = [...jsRepos, ...tsRepos].filter(({ full_name }) => {
+//           if (seen.has(full_name)) return false;
+//           seen.add(full_name);
+//           return true;
+//         });
+
+//         send({
+//           type: "progress",
+//           repo: `Scanning ${repos.length} repos (${jsRepos.length} JS + ${tsRepos.length} TS)…`,
+//           language: "",
+//         });
+
+//         let totalFound = 0;
+
+//         for (const repo of repos) {
+//           send({ type: "progress", repo: repo.full_name, language: repo.language });
+
+//           const repoSeenShas = new Set<string>();
+
+//           const emitCommit = (payload: CommitPayload) => {
+//             if (repoSeenShas.has(payload.sha)) return;
+//             repoSeenShas.add(payload.sha);
+//             send({ type: "commit", data: payload });
+//             totalFound++;
+//           };
+
+//           await searchCommitMessages(repo, emitCommit);
+//           await sleep(300);
+//           await searchPRBodies(repo, emitCommit);
+//           await sleep(500);
+//         }
+
+//         send({ type: "done", total: totalFound });
+//       } catch (err: unknown) {
+//         const message =
+//           (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
+//           "Failed to fetch from GitHub";
+//         send({ type: "error", message });
+//       } finally {
+//         controller.close();
+//       }
+//     },
+//   });
+
+//   return new Response(stream, {
+//     headers: {
+//       "Content-Type": "text/event-stream",
+//       "Cache-Control": "no-cache",
+//       Connection: "keep-alive",
+//     },
+//   });
+// }
+
+// async function searchCommitMessages(repo: RepoEntry, emit: (c: CommitPayload) => void) {
+//   let page = 1;
+//   let hasMore = true;
+
+//   while (hasMore) {
+//     try {
+//       const res = await axios.get(`${GH}/search/commits`, {
+//         headers: commitSearchHeaders,
+//         params: {
+//           q: `flak network repo:${repo.full_name}`,
+//           per_page: 10,
+//           page,
+//         },
+//       });
+
+//       const items = res.data.items ?? [];
+
+//       for (const item of items) {
+//         const message: string = item.commit?.message ?? "";
+
+//         // Hard filter — both words must actually be present
+//         if (!isValidNetworkCommit(message)) continue;
+
+//         emit({
+//           sha: item.sha,
+//           html_url: item.html_url,
+//           source: "commit",
+//           commit: {
+//             message,
+//             author: {
+//               date: item.commit?.author?.date ?? "",
+//               name: item.commit?.author?.name ?? "",
+//             },
+//           },
+//           repository: { full_name: repo.full_name, language: repo.language },
+//         });
+//       }
+
+//       hasMore = items.length === 10 && page < 3;
+//       page++;
+//       if (hasMore) await sleep(300);
+//     } catch {
+//       hasMore = false;
+//     }
+//   }
+// }
+
+// async function searchPRBodies(repo: RepoEntry, emit: (c: CommitPayload) => void) {
+//   let page = 1;
+//   let hasMore = true;
+
+//   while (hasMore) {
+//     try {
+//       const res = await axios.get(`${GH}/search/issues`, {
+//         headers: ghHeaders,
+//         params: {
+//           q: `flak network repo:${repo.full_name} type:pr is:merged`,
+//           per_page: 10,
+//           page,
+//         },
+//       });
+
+//       const items = res.data.items ?? [];
+
+//       for (const pr of items) {
+//         // Hard filter — check PR title + body both contain the required words
+//         const prText = `${pr.title ?? ""} ${pr.body ?? ""}`;
+//         if (!isValidNetworkCommit(prText)) continue;
+
+//         try {
+//           const prRes = await axios.get(
+//             `${GH}/repos/${repo.full_name}/pulls/${pr.number}`,
+//             { headers: ghHeaders },
+//           );
+
+//           const mergeCommitSha: string | null = prRes.data.merge_commit_sha ?? null;
+//           if (!mergeCommitSha) continue;
+
+//           const commitRes = await axios.get(
+//             `${GH}/repos/${repo.full_name}/commits/${mergeCommitSha}`,
+//             { headers: ghHeaders },
+//           );
+
+//           const c = commitRes.data;
+
+//           emit({
+//             sha: mergeCommitSha,
+//             html_url: c.html_url ?? `https://github.com/${repo.full_name}/commit/${mergeCommitSha}`,
+//             source: "pr",
+//             commit: {
+//               message: `[PR #${pr.number}] ${pr.title}\n\n${c.commit?.message ?? ""}`,
+//               author: {
+//                 date: c.commit?.author?.date ?? "",
+//                 name: c.commit?.author?.name ?? "",
+//               },
+//             },
+//             repository: { full_name: repo.full_name, language: repo.language },
+//           });
+
+//           await sleep(200);
+//         } catch {
+//           continue;
+//         }
+//       }
+
+//       hasMore = items.length === 10 && page < 3;
+//       page++;
+//       if (hasMore) await sleep(300);
+//     } catch {
+//       hasMore = false;
+//     }
+//   }
+// }
+
+// function sleep(ms: number) {
+//   return new Promise((r) => setTimeout(r, ms));
+// }
